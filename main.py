@@ -1,3 +1,10 @@
+"""
+Módulo para monitoreo de procesos y manejo de métricas en tiempo real.
+
+Este módulo ofrece herramientas para rastrear métricas de rendimiento, registrar advertencias, 
+manejar errores y realizar actualizaciones de estado en procesos complejos.
+
+"""
 import kagglehub
 import shutil
 from pathlib import Path
@@ -22,6 +29,21 @@ from typing import Dict, List, Optional, Any, Tuple
 
 @dataclass
 class ProcessMetrics:
+    """
+    Clase para almacenar y gestionar métricas de un proceso.
+
+    Atributos:
+        - start_time (float): Hora de inicio del proceso.
+        - records_processed (int): Número de registros procesados.
+        - records_failed (int): Número de registros que fallaron.
+        - current_stage (str): Etapa actual del proceso.
+        - error_details (Dict): Detalles de los errores ocurridos.
+        - warnings (List[str]): Lista de advertencias generadas.
+        - performance_metrics (Dict[str, float]): Métricas de rendimiento específicas.
+
+    Métodos:
+        - to_dict: Convierte las métricas en un diccionario para exportarlas o almacenarlas.
+    """
     start_time: float
     records_processed: int = 0
     records_failed: int = 0
@@ -31,6 +53,12 @@ class ProcessMetrics:
     performance_metrics: Dict[str, float] = field(default_factory=dict)
     
     def to_dict(self) -> Dict:
+        """
+        Convierte las métricas del proceso en un diccionario.
+
+        Returns:
+            Dict: Representación de las métricas del proceso.
+        """
         return {
             "Duracion": round(time.time() - self.start_time, 2),
             "Registros procesados": self.records_processed,
@@ -42,23 +70,65 @@ class ProcessMetrics:
         }
 
 class ProcessMonitor:
+    """
+    Clase para monitorear el estado y las métricas de un proceso en ejecución.
+
+    Atributos:
+        - status_file (Path): Archivo donde se guardará el estado del proceso.
+        - metrics (ProcessMetrics): Instancia de métricas para el proceso actual.
+        - logger (Logger): Objeto de registro para manejar logs.
+
+    Métodos:
+        - add_warning: Registra una advertencia en las métricas.
+        - add_performance_metric: Añade una métrica de rendimiento específica.
+        - track_time: Contexto para medir el tiempo de ejecución de una operación.
+        - update_status: Actualiza el estado del proceso, registra errores y detalles.
+        - _save_status: Guarda las métricas y el estado actual en un archivo JSON.
+    """
     def __init__(self, status_file: Path = Path("process_status.json")):
+        """
+        Inicializa el monitor del proceso.
+
+        Args:
+            status_file (Path): Ruta del archivo donde se guardará el estado del proceso.
+        """
         self.metrics = ProcessMetrics(start_time=time.time())
         self.status_file = status_file
         self.logger = logging.getLogger(__name__)
 
     def add_warning(self, warning: str) -> None:
+        """
+        Agrega una advertencia a las métricas del proceso.
+
+        Args:
+            warning (str): Mensaje de advertencia.
+        """
         self.metrics.warnings.append(warning)
         self.logger.warning(warning)
 
     def add_performance_metric(self, name: str, value: float) -> None:
-        """Añade una métrica de rendimiento al monitor"""
+        """
+        Añade una métrica de rendimiento al monitor.
+
+        Args:
+            name (str): Nombre de la métrica.
+            value (float): Valor de la métrica.
+        """
         self.metrics.performance_metrics[name] = value
         self.logger.info(f"Métrica de rendimiento - {name}: {value}")
 
     @contextmanager
     def track_time(self, operation_name: str):
-        """Contexto para medir el tiempo de operaciones"""
+        """
+        Contexto para medir el tiempo de operaciones específicas.
+
+        Args:
+            operation_name (str): Nombre de la operación a rastrear.
+
+        Ejemplo:
+            with monitor.track_time("cargar_datos"):
+                cargar_datos()
+        """
         start_time = time.time()
         try:
             yield
@@ -68,6 +138,15 @@ class ProcessMonitor:
 
     def update_status(self, stage: str, records_processed: Optional[int] = None, 
                      error: Optional[Exception] = None, details: str = "") -> None:
+        """
+        Actualiza el estado del proceso.
+
+        Args:
+            stage (str): Nueva etapa del proceso.
+            records_processed (Optional[int]): Cantidad de registros procesados en esta etapa.
+            error (Optional[Exception]): Excepción ocurrida (si aplica).
+            details (str): Detalles adicionales del estado.
+        """
         try:
             previous_stage = self.metrics.current_stage
             self.metrics.current_stage = stage
@@ -106,7 +185,17 @@ class ProcessMonitor:
             self.logger.error(f"Error al guardar estado: {e}")
 
 class ETLConfig:
-    """Clase para manejar la configuración del proceso ETL"""
+    """
+    Clase para manejar la configuración del proceso ETL.
+
+    Atributos:
+        base_dir (Path): Directorio base para el proceso ETL.
+        insumos_dir (Path): Directorio donde se encuentran los archivos de entrada.
+        salidas_dir (Path): Directorio donde se almacenarán los resultados procesados.
+        logs_dir (Path): Directorio donde se guardarán los archivos de log.
+        batch_size (int): Tamaño del lote para procesamiento por lotes. Por defecto es 10,000.
+        max_workers (int): Número máximo de hilos para la ejecución concurrente. Por defecto es 4.
+    """
     def __init__(self, base_dir: Path):
         self.base_dir = base_dir
         self.insumos_dir = base_dir / "insumos"
@@ -116,12 +205,34 @@ class ETLConfig:
         self.max_workers = 4
 
     def ensure_directories(self) -> None:
-        """Asegura que existan todos los directorios necesarios"""
+        """
+        Clase para manejar la configuración del proceso ETL.
+
+        Atributos:
+            base_dir (Path): Directorio base para el proceso ETL.
+            insumos_dir (Path): Directorio donde se encuentran los archivos de entrada.
+            salidas_dir (Path): Directorio donde se almacenarán los resultados procesados.
+            logs_dir (Path): Directorio donde se guardarán los archivos de log.
+            batch_size (int): Tamaño del lote para procesamiento por lotes. Por defecto es 10,000.
+            max_workers (int): Número máximo de hilos para la ejecución concurrente. Por defecto es 4.
+        """
         for directory in [self.insumos_dir, self.salidas_dir, self.logs_dir]:
             directory.mkdir(parents=True, exist_ok=True)
 
 def setup_logging(config: ETLConfig) -> logging.Logger:
-    """Configuración mejorada del sistema de logging"""
+    """
+    Configura el sistema de logging para registrar eventos del proceso ETL.
+
+    Args:
+        config (ETLConfig): Configuración del proceso ETL que incluye el directorio de logs.
+
+    Returns:
+        logging.Logger: Logger configurado para registrar tanto en consola como en archivo.
+
+    Detalles:
+        - Los logs se guardan en un archivo con un nombre único basado en la fecha y hora actuales.
+        - Incluye tanto un manejador de consola como de archivo.
+    """
     try:
         logger = logging.getLogger(__name__)
         logger.setLevel(logging.INFO)
@@ -156,6 +267,17 @@ def setup_logging(config: ETLConfig) -> logging.Logger:
 
 @contextmanager
 def error_handler(monitor: ProcessMonitor, stage: str):
+    """
+    Manejador de errores que actualiza el estado del monitor en caso de excepciones.
+
+    Args:
+        monitor (ProcessMonitor): Instancia del monitor de proceso para registrar errores.
+        stage (str): Nombre de la etapa en la que ocurre el error.
+
+    Uso:
+        Este manejador se utiliza dentro de un contexto `with` para capturar errores
+        y actualizar automáticamente el estado del proceso.
+    """
     try:
         yield
     except Exception as e:
@@ -166,7 +288,21 @@ def error_handler(monitor: ProcessMonitor, stage: str):
 
 def clean_directories(monitor: ProcessMonitor) -> None:
     """
-    Limpia la caché de kagglehub, la carpeta de insumos y la carpeta de salidas antes de iniciar el proceso.
+    Limpia las carpetas de caché, insumos y salidas antes de iniciar el proceso ETL.
+
+    Args:
+        monitor (ProcessMonitor): Instancia del monitor para registrar el progreso y errores.
+
+    Pasos:
+        - Limpia la caché de `kagglehub` si existe.
+        - Elimina todos los archivos y carpetas dentro de las carpetas `insumos` y `salidas`.
+
+    Raises:
+        RuntimeError: Si ocurre un error durante la limpieza de directorios.
+
+    Uso:
+        Esta función asegura un estado limpio para el proceso ETL eliminando datos
+        residuales de ejecuciones anteriores.
     """
     logger = logging.getLogger(__name__)
     
@@ -223,6 +359,15 @@ def clean_directories(monitor: ProcessMonitor) -> None:
 
 
 def setup_and_download_files(monitor: ProcessMonitor) -> None:
+    """
+    Configura el entorno y descarga los archivos necesarios desde Kaggle.
+
+    Args:
+        monitor (ProcessMonitor): Objeto para rastrear el progreso y estado del proceso.
+
+    Raises:
+        RuntimeError: Si ocurre un error durante la descarga o el movimiento de archivos.
+    """
     logger = logging.getLogger(__name__)
     base_dir = Path(__file__).parent
     insumos_dir = base_dir / "insumos"
@@ -267,11 +412,28 @@ def setup_and_download_files(monitor: ProcessMonitor) -> None:
 class DataCleaner:
     """Clase para manejar la limpieza de datos"""
     def __init__(self, monitor: ProcessMonitor):
+        """
+        Constructor de DataCleaner.
+
+        Args:
+            monitor (ProcessMonitor): Objeto para rastrear métricas y tiempos de procesamiento.
+        """
         self.monitor = monitor
         self.logger = logging.getLogger(__name__)
 
     def clean_books_data(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Limpia y valida el DataFrame de libros"""
+        """
+        Limpia y valida un DataFrame de libros.
+
+        Args:
+            df (pd.DataFrame): DataFrame de libros con columnas como 'Title', 'authors', y 'publishedDate'.
+
+        Returns:
+            pd.DataFrame: DataFrame limpio y validado.
+
+        Raises:
+            ValueError: Si faltan columnas requeridas en el DataFrame.
+        """
         with self.monitor.track_time("clean_books"):
             df = df.copy()
             
@@ -294,7 +456,18 @@ class DataCleaner:
             return df
 
     def clean_ratings_data(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Limpia y valida el DataFrame de ratings"""
+        """
+        Limpia y valida un DataFrame de calificaciones.
+
+        Args:
+            df (pd.DataFrame): DataFrame de calificaciones con columnas como 'Id', 'Title', 'review/score', y 'Price'.
+
+        Returns:
+            pd.DataFrame: DataFrame limpio y validado.
+
+        Raises:
+            ValueError: Si faltan columnas requeridas en el DataFrame.
+        """
         with self.monitor.track_time("clean_ratings"):
             df = df.copy()
             
@@ -315,6 +488,15 @@ class DataCleaner:
 class SentimentAnalyzer:
     """Clase mejorada para análisis de sentimientos"""
     def __init__(self, monitor: ProcessMonitor):
+        """
+        Constructor de SentimentAnalyzer.
+
+        Args:
+            monitor (ProcessMonitor): Objeto para rastrear métricas y tiempos de procesamiento.
+
+        Raises:
+            RuntimeError: Si no se pueden descargar o verificar los recursos necesarios de NLTK.
+        """
         self.monitor = monitor
         self.logger = logging.getLogger(__name__)
         
@@ -342,12 +524,28 @@ class SentimentAnalyzer:
                 raise RuntimeError(error_msg) from e
 
     def process_batch(self, texts: List[str]) -> List[float]:
-        """Procesa un lote de textos en paralelo"""
+        """
+        Procesa un lote de textos en paralelo para análisis de sentimientos.
+
+        Args:
+            texts (List[str]): Lista de textos a analizar.
+
+        Returns:
+            List[float]: Lista de puntajes de sentimiento.
+        """
         with ThreadPoolExecutor(max_workers=4) as executor:
             return list(executor.map(self.analyze_sentiment, texts))
 
     def analyze_sentiment(self, text: str) -> float:
-        """Analiza el sentimiento de un texto individual"""
+        """
+        Analiza el sentimiento de un texto individual.
+
+        Args:
+            text (str): Texto a analizar.
+
+        Returns:
+            float: Polaridad del sentimiento del texto.
+        """
         try:
             if not isinstance(text, str):
                 return 0.0
@@ -362,7 +560,15 @@ class SentimentAnalyzer:
             return 0.0
 
     def _preprocess_text(self, text: str) -> str:
-        """Preprocesa el texto para análisis con manejo de errores mejorado"""
+        """
+        Preprocesa el texto para análisis de sentimientos.
+
+        Args:
+            text (str): Texto a preprocesar.
+
+        Returns:
+            str: Texto preprocesado.
+        """
         try:
             # Verificar nuevamente la disponibilidad de punkt
             if not nltk.data.find('tokenizers/punkt'):
@@ -419,14 +625,29 @@ class SentimentAnalyzer:
         return pd.Series(results, index=df.index)
 
 class DataAnalyzer:
-    """Clase para análisis de datos"""
+    """Clase para análisis de datos que incluye valoraciones, autores y sentimientos de reseñas."""
     def __init__(self, monitor: ProcessMonitor):
+        """
+        Inicializa la clase DataAnalyzer.
+
+        Args:
+            monitor (ProcessMonitor): Objeto para rastrear el tiempo de ejecución de los procesos.
+        """
         self.monitor = monitor
         self.logger = logging.getLogger(__name__)
         self.sentiment_analyzer = SentimentAnalyzer(monitor)
 
     def analyze_data(self, books_df: pd.DataFrame, ratings_df: pd.DataFrame) -> Dict[str, Any]:
-        """Realiza análisis completo de los datos"""
+        """
+        Realiza un análisis completo de los datos relacionados con libros y reseñas.
+
+        Args:
+            books_df (pd.DataFrame): DataFrame con información de los libros.
+            ratings_df (pd.DataFrame): DataFrame con información de las reseñas.
+
+        Returns:
+            Dict[str, Any]: Resultados del análisis en forma de diccionario.
+        """
         with self.monitor.track_time("complete_analysis"):
             try:
                 results = {}
@@ -447,7 +668,15 @@ class DataAnalyzer:
                 raise
 
     def _analyze_ratings(self, df: pd.DataFrame) -> Dict[str, Any]:
-        """Analiza las valoraciones"""
+        """
+        Analiza las valoraciones de los libros.
+
+        Args:
+            df (pd.DataFrame): DataFrame con las reseñas de los libros.
+
+        Returns:
+            Dict[str, Any]: Resultados del análisis de valoraciones.
+        """
         with self.monitor.track_time("ratings_analysis"):
             return {
                 "avg_ratings": df.groupby('Title')['review/score'].agg(['mean', 'count']).to_dict(),
@@ -455,7 +684,15 @@ class DataAnalyzer:
             }
 
     def _analyze_authors(self, df: pd.DataFrame) -> Dict[str, Any]:
-        """Analiza datos de autores"""
+        """
+        Analiza datos relacionados con los autores de los libros.
+
+        Args:
+            df (pd.DataFrame): DataFrame con información de los libros.
+
+        Returns:
+            Dict[str, Any]: Resultados del análisis de autores.
+        """
         with self.monitor.track_time("authors_analysis"):
             return {
                 "top_authors": df['authors'].value_counts().head(10).to_dict(),
@@ -463,7 +700,15 @@ class DataAnalyzer:
             }
 
     def _analyze_sentiments(self, df: pd.DataFrame) -> Dict[str, Any]:
-        """Analiza sentimientos de las reseñas"""
+        """
+        Analiza los sentimientos de las reseñas.
+
+        Args:
+            df (pd.DataFrame): DataFrame con las reseñas de los libros.
+
+        Returns:
+            Dict[str, Any]: Resultados del análisis de sentimientos.
+        """
         with self.monitor.track_time("sentiment_analysis"):
             # Calculate sentiments
             sentiments = self.sentiment_analyzer.analyze_dataframe(
@@ -493,13 +738,13 @@ class DataAnalyzer:
 
 def convert_to_serializable(results: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Converts complex data types to serializable formats
-    
+    Convierte estructuras complejas a formatos serializables.
+
     Args:
-        results: Dictionary of analysis results
-    
+        results (Dict[str, Any]): Diccionario con los resultados del análisis.
+
     Returns:
-        Serializable dictionary
+        Dict[str, Any]: Resultados en formatos serializables.
     """
     serializable_results = {}
     
@@ -528,19 +773,25 @@ class BookRanker:
     Clase para realizar ranking de libros según diferentes métricas
     """
     def __init__(self, monitor: ProcessMonitor):
+        """
+        Inicializa la clase BookRanker.
+
+        Args:
+            monitor (ProcessMonitor): Objeto para rastrear el tiempo de ejecución de los procesos.
+        """
         self.monitor = monitor
         self.logger = logging.getLogger(__name__)
 
     def rank_by_review_count(self, ratings_df: pd.DataFrame, top_n: int = 10) -> pd.DataFrame:
         """
-        Rankea los libros por número total de reseñas
-        
+        Rankea los libros por número total de reseñas.
+
         Args:
-            ratings_df: DataFrame de reseñas
-            top_n: Número de libros a mostrar
-        
+            ratings_df (pd.DataFrame): DataFrame con las reseñas.
+            top_n (int): Número de libros a mostrar en el ranking.
+
         Returns:
-            DataFrame con los libros más revisados
+            pd.DataFrame: DataFrame con los libros más revisados.
         """
         with self.monitor.track_time("rank_by_review_count"):
             review_counts = ratings_df['Title'].value_counts()
@@ -552,15 +803,15 @@ class BookRanker:
 
     def rank_by_average_score(self, ratings_df: pd.DataFrame, min_reviews: int = 5, top_n: int = 10) -> pd.DataFrame:
         """
-        Rankea los libros por promedio de puntaje
-        
+        Rankea los libros por promedio de puntaje.
+
         Args:
-            ratings_df: DataFrame de reseñas
-            min_reviews: Número mínimo de reseñas para considerar un libro
-            top_n: Número de libros a mostrar
-        
+            ratings_df (pd.DataFrame): DataFrame con las reseñas.
+            min_reviews (int): Número mínimo de reseñas para incluir un libro en el ranking.
+            top_n (int): Número de libros a mostrar en el ranking.
+
         Returns:
-            DataFrame con los libros mejor puntuados
+            pd.DataFrame: DataFrame con los libros mejor puntuados.
         """
         with self.monitor.track_time("rank_by_average_score"):
             book_ratings = ratings_df.groupby('Title')['review/score'].agg(['mean', 'count'])
@@ -580,16 +831,16 @@ class BookRanker:
     def rank_by_sentiment_score(self, ratings_df: pd.DataFrame, sentiment_scores: pd.Series, 
                                  min_reviews: int = 5, top_n: int = 10) -> pd.DataFrame:
         """
-        Rankea los libros por sentimiento promedio de las reseñas
-        
+        Rankea los libros por sentimiento promedio de las reseñas.
+
         Args:
-            ratings_df: DataFrame de reseñas
-            sentiment_scores: Serie con puntajes de sentimiento
-            min_reviews: Número mínimo de reseñas para considerar un libro
-            top_n: Número de libros a mostrar
-        
+            ratings_df (pd.DataFrame): DataFrame con las reseñas.
+            sentiment_scores (pd.Series): Serie con puntajes de sentimiento.
+            min_reviews (int): Número mínimo de reseñas para incluir un libro en el ranking.
+            top_n (int): Número de libros a mostrar en el ranking.
+
         Returns:
-            DataFrame con los libros con mejor sentimiento
+            pd.DataFrame: DataFrame con los libros con mejor sentimiento.
         """
         with self.monitor.track_time("rank_by_sentiment_score"):
             # Agregar puntajes de sentimiento al DataFrame
@@ -615,13 +866,22 @@ class BookRanker:
 
 def export_results_to_txt(books_df: pd.DataFrame, ratings_df: pd.DataFrame, results: Dict[str, Any], output_path: Path) -> None:
     """
-    Exporta los resultados del análisis a un archivo de texto formateado.
-    
+    Exporta los resultados del análisis de datos de libros y reseñas a un archivo de texto formateado.
+
     Args:
-        books_df: DataFrame con datos de libros
-        ratings_df: DataFrame con datos de reseñas
-        results: Diccionario con resultados del análisis
-        output_path: Ruta donde se guardará el archivo
+        books_df (pd.DataFrame): DataFrame que contiene los datos de los libros.
+        ratings_df (pd.DataFrame): DataFrame que contiene las reseñas de los libros.
+        results (Dict[str, Any]): Diccionario con los resultados del análisis.
+        output_path (Path): Ruta donde se generará y guardará el archivo de reporte.
+    
+    Funcionalidad:
+        1. Convierte los resultados del análisis a formatos serializables.
+        2. Utiliza componentes como `BookRanker` y `SentimentAnalyzer` para generar rankings y analizar sentimientos.
+        3. Genera un archivo de texto que incluye:
+            - Estadísticas generales de libros y reseñas.
+            - Rankings de libros basados en valoraciones, sentimiento y número de reseñas.
+            - Análisis de sentimientos generales y por categorías.
+            - Información de autores más populares.
     """
     # Convertir resultados a tipos serializables
     results = convert_to_serializable(results)
@@ -769,7 +1029,16 @@ def export_results_to_txt(books_df: pd.DataFrame, ratings_df: pd.DataFrame, resu
             f.write(f"{row['Título'][:50]:50} | Sentimiento: {row['Sentimiento Promedio']:.3f} | Reseñas: {int(row['Número de Reseñas']):,}\n")
             
 def main():
-    """Función principal mejorada"""
+    """
+    Función principal mejorada para ejecutar el proceso ETL de análisis de datos de libros.
+    
+    Realiza las siguientes tareas:
+        1. Configura el entorno y asegura la estructura de directorios.
+        2. Inicializa los componentes necesarios como monitor, logger, y configuraciones.
+        3. Descarga y limpia los datos de entrada.
+        4. Realiza análisis de los datos de libros y valoraciones.
+        5. Exporta los resultados en formatos JSON y texto.
+    """
     try:
         # Inicializar configuración
         config = ETLConfig(Path(__file__).parent)
