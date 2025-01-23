@@ -418,7 +418,6 @@ class SentimentAnalyzer:
         
         return pd.Series(results, index=df.index)
 
-
 class DataAnalyzer:
     """Clase para análisis de datos"""
     def __init__(self, monitor: ProcessMonitor):
@@ -524,119 +523,6 @@ def convert_to_serializable(results: Dict[str, Any]) -> Dict[str, Any]:
     
     return serializable_results
 
-def export_results_to_txt(books_df: pd.DataFrame, ratings_df: pd.DataFrame, results: Dict[str, Any], output_path: Path) -> None:
-    """
-    Exporta los resultados del análisis a un archivo de texto formateado.
-    
-    Args:
-        books_df: DataFrame con datos de libros
-        ratings_df: DataFrame con datos de reseñas
-        results: Diccionario con resultados del análisis
-        output_path: Ruta donde se guardará el archivo
-    """
-    # Convertir resultados a tipos serializables
-    results = convert_to_serializable(results)
-    
-    # Preparar ranker para los rankings
-    monitor = ProcessMonitor()
-    book_ranker = BookRanker(monitor)
-    
-    # Calcular puntajes de sentimiento
-    sentiment_analyzer = SentimentAnalyzer(monitor)
-    sentiment_scores = sentiment_analyzer.analyze_dataframe(ratings_df, 'review/text', batch_size=1000)
-    
-    # Generar rankings
-    top_review_count = book_ranker.rank_by_review_count(ratings_df)
-    top_average_score = book_ranker.rank_by_average_score(ratings_df)
-    top_sentiment_score = book_ranker.rank_by_sentiment_score(ratings_df, sentiment_scores)
-    
-    with open(output_path, 'w', encoding='utf-8') as f:
-        # Escribir encabezado
-        f.write("=== REPORTE DE ANÁLISIS DE LIBROS DE AMAZON ===\n")
-        f.write(f"Fecha de generación: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
-        
-        # Estadísticas generales
-        f.write("=== ESTADÍSTICAS GENERALES ===\n")
-        total_reviews = len(ratings_df)
-        total_books = len(books_df)
-        f.write(f"Total de reseñas analizadas: {total_reviews:,}\n")
-        f.write(f"Total de libros únicos: {total_books:,}\n\n")
-        
-        # Valoraciones promedio por libro
-        f.write("=== VALORACIONES PROMEDIO POR LIBRO ===\n")
-        avg_ratings = pd.DataFrame.from_dict(results['avg_ratings'], orient='index')
-        top_rated_books = avg_ratings.sort_values('mean', ascending=False).head(10)
-        for idx, row in top_rated_books.iterrows():
-            f.write(f"{idx[:50]:50} | Rating: {row['mean']:.2f} | Reseñas: {int(row['count']):,}\n")
-        f.write("\n")
-        
-        # Autores más populares
-        f.write("=== AUTORES MÁS POPULARES ===\n")
-        top_authors = pd.Series(results['top_authors'])
-        for author, count in top_authors.items():
-            f.write(f"{author:50} | Libros: {int(count):,}\n")
-        f.write("\n")
-        
-        # Análisis de sentimientos
-        f.write("=== ANÁLISIS DE SENTIMIENTOS ===\n")
-        sentiment_stats = results['sentiment_statistics']
-        f.write(f"Sentimiento promedio general: {sentiment_stats['mean']:.3f}\n")
-        f.write(f"Desviación estándar: {sentiment_stats['std']:.3f}\n\n")
-        
-        # Distribución de sentimientos
-        f.write("=== DISTRIBUCIÓN DE SENTIMIENTOS ===\n")
-        sentiment_dist = results['sentiment_distribution']
-        total_sentiments = sum(sentiment_dist.values())
-        for category, count in sentiment_dist.items():
-            percentage = (count / total_sentiments) * 100
-            f.write(f"{category:15} | {count:,} reseñas ({percentage:.1f}%)\n")
-        f.write("\n")
-        
-        # Sentimiento por valoración
-        f.write("=== SENTIMIENTO PROMEDIO POR VALORACIÓN ===\n")
-        sentiment_by_rating = pd.Series(results['sentiment_by_rating']).sort_index()
-        for rating, sentiment in sentiment_by_rating.items():
-            f.write(f"Rating {rating}: {sentiment:.3f}\n")
-        f.write("\n")
-        
-        # Libros con mejor sentimiento promedio (método anterior)
-        f.write("=== TOP 10 LIBROS CON MEJOR SENTIMIENTO ===\n")
-        book_sentiments = ratings_df.copy()
-        book_sentiments['sentiment_score'] = book_sentiments['review/score'].map(results['sentiment_by_rating'])
-        
-        book_sentiment_summary = book_sentiments.groupby('Title').agg({
-            'sentiment_score': 'mean',
-            'review/score': 'count'
-        }).rename(columns={'review/score': 'count'})
-        
-        # Filtrar libros con al menos 5 reseñas
-        book_sentiment_summary = book_sentiment_summary[book_sentiment_summary['count'] >= 5]
-        top_sentiment_books = book_sentiment_summary.sort_values('sentiment_score', ascending=False).head(10)
-        
-        for title, row in top_sentiment_books.iterrows():
-            f.write(f"{title[:50]:50} | Sentimiento: {row['sentiment_score']:.3f} | Reseñas: {int(row['count']):,}\n")
-        f.write("\n")
-        
-        # Nuevos rankings de libros
-        f.write("\n=== RANKINGS ADICIONALES DE LIBROS ===\n\n")
-        
-        # Top libros por número de reseñas
-        f.write("=== TOP 10 LIBROS POR NÚMERO DE RESEÑAS ===\n")
-        for idx, row in top_review_count.iterrows():
-            f.write(f"{row['Título'][:50]:50} | Reseñas: {int(row['Número de Reseñas']):,}\n")
-        f.write("\n")
-        
-        # Top libros por puntaje promedio
-        f.write("=== TOP 10 LIBROS POR PUNTAJE PROMEDIO ===\n")
-        for idx, row in top_average_score.iterrows():
-            f.write(f"{row['Título'][:50]:50} | Puntaje: {row['Puntaje Promedio']:.2f} | Reseñas: {int(row['Número de Reseñas']):,}\n")
-        f.write("\n")
-        
-        # Top libros por sentimiento promedio
-        f.write("=== TOP 10 LIBROS POR SENTIMIENTO PROMEDIO ===\n")
-        for idx, row in top_sentiment_score.iterrows():
-            f.write(f"{row['Título'][:50]:50} | Sentimiento: {row['Sentimiento Promedio']:.3f} | Reseñas: {int(row['Número de Reseñas']):,}\n")
-
 class BookRanker:
     """
     Clase para realizar ranking de libros según diferentes métricas
@@ -727,6 +613,124 @@ class BookRanker:
                 'Número de Reseñas': top_sentiment_books[('sentiment_score', 'count')]
             })
 
+def export_results_to_txt(books_df: pd.DataFrame, ratings_df: pd.DataFrame, results: Dict[str, Any], output_path: Path) -> None:
+    """
+    Exporta los resultados del análisis a un archivo de texto formateado.
+    
+    Args:
+        books_df: DataFrame con datos de libros
+        ratings_df: DataFrame con datos de reseñas
+        results: Diccionario con resultados del análisis
+        output_path: Ruta donde se guardará el archivo
+    """
+    # Convertir resultados a tipos serializables
+    results = convert_to_serializable(results)
+    
+    # Preparar ranker para los rankings
+    monitor = ProcessMonitor()
+    book_ranker = BookRanker(monitor)
+    
+    # Calcular puntajes de sentimiento
+    sentiment_analyzer = SentimentAnalyzer(monitor)
+    sentiment_scores = sentiment_analyzer.analyze_dataframe(ratings_df, 'review/text', batch_size=1000)
+    
+    # Generar rankings
+    top_review_count = book_ranker.rank_by_review_count(ratings_df)
+    top_average_score = book_ranker.rank_by_average_score(ratings_df)
+    top_sentiment_score = book_ranker.rank_by_sentiment_score(ratings_df, sentiment_scores)
+    
+    with open(output_path, 'w', encoding='utf-8') as f:
+        # Escribir encabezado
+        f.write("=== REPORTE DE ANÁLISIS DE LIBROS DE AMAZON ===\n")
+        f.write(f"Fecha de generación: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+        
+        # Estadísticas generales
+        f.write("=== ESTADÍSTICAS GENERALES ===\n")
+        total_reviews = len(ratings_df)
+        total_books = len(books_df)
+        f.write(f"Total de reseñas analizadas: {total_reviews:,}\n")
+        f.write(f"Total de libros únicos: {total_books:,}\n\n")
+        
+        # Valoraciones promedio por libro
+        f.write("=== VALORACIONES PROMEDIO POR LIBRO ===\n")
+        avg_ratings = results['avg_ratings']
+        top_rated_books = avg_ratings.sort_values('mean', ascending=False).head(10)
+        rated_books = [
+            (title, stats['mean'], stats['count']) 
+            for title, stats in avg_ratings.items()
+        ]
+        
+        top_rated_books = sorted(rated_books, key=lambda x: x[1], reverse=True)[:10]
+        
+        for title, mean_rating, count in top_rated_books:
+            f.write(f"{title[:50]:50} | Rating: {mean_rating:.2f} | Reseñas: {int(count):,}\n")
+        
+        # Autores más populares
+        f.write("=== AUTORES MÁS POPULARES ===\n")
+        top_authors = pd.Series(results['top_authors'])
+        for author, count in top_authors.items():
+            f.write(f"{author:50} | Libros: {int(count):,}\n")
+        f.write("\n")
+        
+        # Análisis de sentimientos
+        f.write("=== ANÁLISIS DE SENTIMIENTOS ===\n")
+        sentiment_stats = results['sentiment_statistics']
+        f.write(f"Sentimiento promedio general: {sentiment_stats['mean']:.3f}\n")
+        f.write(f"Desviación estándar: {sentiment_stats['std']:.3f}\n\n")
+        
+        # Distribución de sentimientos
+        f.write("=== DISTRIBUCIÓN DE SENTIMIENTOS ===\n")
+        sentiment_dist = results['sentiment_distribution']
+        total_sentiments = sum(sentiment_dist.values())
+        for category, count in sentiment_dist.items():
+            percentage = (count / total_sentiments) * 100
+            f.write(f"{category:15} | {count:,} reseñas ({percentage:.1f}%)\n")
+        f.write("\n")
+        
+        # Sentimiento por valoración
+        f.write("=== SENTIMIENTO PROMEDIO POR VALORACIÓN ===\n")
+        sentiment_by_rating = pd.Series(results['sentiment_by_rating']).sort_index()
+        for rating, sentiment in sentiment_by_rating.items():
+            f.write(f"Rating {rating}: {sentiment:.3f}\n")
+        f.write("\n")
+        
+        # Libros con mejor sentimiento promedio (método anterior)
+        f.write("=== TOP 10 LIBROS CON MEJOR SENTIMIENTO ===\n")
+        book_sentiments = ratings_df.copy()
+        book_sentiments['sentiment_score'] = book_sentiments['review/score'].map(results['sentiment_by_rating'])
+        
+        book_sentiment_summary = book_sentiments.groupby('Title').agg({
+            'sentiment_score': 'mean',
+            'review/score': 'count'
+        }).rename(columns={'review/score': 'count'})
+        
+        # Filtrar libros con al menos 5 reseñas
+        book_sentiment_summary = book_sentiment_summary[book_sentiment_summary['count'] >= 5]
+        top_sentiment_books = book_sentiment_summary.sort_values('sentiment_score', ascending=False).head(10)
+        
+        for title, row in top_sentiment_books.iterrows():
+            f.write(f"{title[:50]:50} | Sentimiento: {row['sentiment_score']:.3f} | Reseñas: {int(row['count']):,}\n")
+        f.write("\n")
+        
+        # Nuevos rankings de libros
+        f.write("\n=== RANKINGS ADICIONALES DE LIBROS ===\n\n")
+        
+        # Top libros por número de reseñas
+        f.write("=== TOP 10 LIBROS POR NÚMERO DE RESEÑAS ===\n")
+        for idx, row in top_review_count.iterrows():
+            f.write(f"{row['Título'][:50]:50} | Reseñas: {int(row['Número de Reseñas']):,}\n")
+        f.write("\n")
+        
+        # Top libros por puntaje promedio
+        f.write("=== TOP 10 LIBROS POR PUNTAJE PROMEDIO ===\n")
+        for idx, row in top_average_score.iterrows():
+            f.write(f"{row['Título'][:50]:50} | Puntaje: {row['Puntaje Promedio']:.2f} | Reseñas: {int(row['Número de Reseñas']):,}\n")
+        f.write("\n")
+        
+        # Top libros por sentimiento promedio
+        f.write("=== TOP 10 LIBROS POR SENTIMIENTO PROMEDIO ===\n")
+        for idx, row in top_sentiment_score.iterrows():
+            f.write(f"{row['Título'][:50]:50} | Sentimiento: {row['Sentimiento Promedio']:.3f} | Reseñas: {int(row['Número de Reseñas']):,}\n")
 
 def main():
     """Función principal mejorada"""
@@ -773,7 +777,6 @@ def main():
             # Exportar resultados en formato de texto
             txt_results_file = config.salidas_dir / "analysis_report.txt"
             export_results_to_txt(books_df, ratings_df, results, txt_results_file)
-            
         
         logger.info("=== Proceso completado exitosamente ===")
         logger.info(f"Reporte generado en: {txt_results_file}")
