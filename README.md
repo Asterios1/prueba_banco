@@ -1,7 +1,7 @@
 
-# ETL Pipeline Project
+# Prueba técnica para Analitico
 
-Este proyecto implementa un sistema modular de ETL (Extract, Transform, Load) para analizar datos relacionados con libros y reseñas, utilizando Python y prácticas modernas de desarrollo.
+Este proyecto implementa un sistema modular de ETL (Extract, Transform, Load) para analizar datos relacionados con libros y reseñas, utilizando Python y prácticas de desarrollo.
 
 ## Propósito del Proyecto
 
