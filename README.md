@@ -15,11 +15,6 @@ El objetivo de este proyecto es proporcionar una solución robusta para limpiar,
 
 ```plaintext
 etl_project/
-├── etl_pipeline/
-│   ├── __init__.py
-│   ├── config.py
-│   ├── logging_setup.py
-│   ├── process_monitor.py
 ├── main.py
 ├── README.md
 ├── requirements.txt
@@ -61,10 +56,5 @@ etl_project/
 3. Durante la ejecución, se crearán automáticamente las carpetas `insumos`, `salidas` y `logs`.
    - Los datos procesados se guardarán en `salidas/`.
    - Los registros de la ejecución estarán disponibles en `logs/`.
-
-## Notas Adicionales
-
-- El archivo principal (`main.py`) utiliza las clases del paquete `etl_pipeline` para manejar configuraciones, monitoreo y logging.
-- Puedes personalizar la configuración editando el archivo `config.py`.
 
 
