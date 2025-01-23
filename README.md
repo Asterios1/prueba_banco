@@ -67,10 +67,4 @@ etl_project/
 - El archivo principal (`main.py`) utiliza las clases del paquete `etl_pipeline` para manejar configuraciones, monitoreo y logging.
 - Puedes personalizar la configuración editando el archivo `config.py`.
 
-## Contribuciones
 
-Si deseas mejorar este proyecto, eres bienvenido a crear un pull request o reportar un problema.
-
-## Licencia
-
-Este proyecto se distribuye bajo la licencia MIT.
