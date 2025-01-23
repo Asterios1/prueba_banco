@@ -19,6 +19,7 @@ from textblob import TextBlob
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 from typing import Dict, List, Optional, Any, Tuple
+import os
 
 @dataclass
 class ProcessMetrics:
@@ -266,12 +267,27 @@ def setup_and_download_files(monitor: ProcessMonitor) -> None:
 
 class DataCleaner:
     """Clase para manejar la limpieza de datos"""
+    
     def __init__(self, monitor: ProcessMonitor):
         self.monitor = monitor
         self.logger = logging.getLogger(__name__)
 
-    def clean_books_data(self, df: pd.DataFrame) -> pd.DataFrame:
+    def clean_books_data(self, df: Optional[pd.DataFrame] = None, file_path: Optional[Path] = None) -> pd.DataFrame:
         """Limpia y valida el DataFrame de libros"""
+        if file_path:
+            # Verificar si el archivo existe antes de cargarlo
+            if not file_path.exists():
+                self.logger.error(f"Archivo no encontrado: {file_path}")
+                raise FileNotFoundError(f"Archivo no encontrado: {file_path}")
+            try:
+                df = pd.read_csv(file_path)
+            except Exception as e:
+                self.logger.error(f"Error al leer el archivo {file_path}: {e}")
+                raise e
+        
+        if df is None:
+            raise ValueError("Se debe proporcionar un DataFrame o una ruta de archivo.")
+
         with self.monitor.track_time("clean_books"):
             df = df.copy()
             
@@ -291,7 +307,7 @@ class DataCleaner:
             if null_counts.any():
                 self.monitor.add_warning(f"Valores nulos encontrados: {null_counts[null_counts > 0].to_dict()}")
 
-            return df
+        return df
 
     def clean_ratings_data(self, df: pd.DataFrame) -> pd.DataFrame:
         """Limpia y valida el DataFrame de ratings"""
