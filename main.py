@@ -653,66 +653,102 @@ def export_results_to_txt(books_df: pd.DataFrame, ratings_df: pd.DataFrame, resu
         
         # Valoraciones promedio por libro
         f.write("=== VALORACIONES PROMEDIO POR LIBRO ===\n")
-        avg_ratings = results['avg_ratings']
-        top_rated_books = avg_ratings.sort_values('mean', ascending=False).head(10)
-        rated_books = [
-            (title, stats['mean'], stats['count']) 
-            for title, stats in avg_ratings.items()
-        ]
+        try:
+            # Manejar diferentes estructuras de datos para avg_ratings
+            if isinstance(results['avg_ratings'], dict):
+                # Si es un diccionario anidado
+                rated_books = [
+                    (title, stats.get('mean', 0), stats.get('count', 0)) 
+                    for title, stats in results['avg_ratings'].items()
+                ]
+            elif isinstance(results['avg_ratings'], list):
+                # Si es una lista de diccionarios
+                rated_books = [
+                    (item.get('Title', 'Unknown'), 
+                     item.get('mean', 0), 
+                     item.get('count', 0)) 
+                    for item in results['avg_ratings']
+                ]
+            else:
+                # Fallback si la estructura no es la esperada
+                rated_books = []
+            
+            # Ordenar y tomar top 10
+            top_rated_books = sorted(rated_books, key=lambda x: x[1], reverse=True)[:10]
+            
+            for title, mean_rating, count in top_rated_books:
+                f.write(f"{title[:50]:50} | Rating: {mean_rating:.2f} | Reseñas: {int(count):,}\n")
         
-        top_rated_books = sorted(rated_books, key=lambda x: x[1], reverse=True)[:10]
-        
-        for title, mean_rating, count in top_rated_books:
-            f.write(f"{title[:50]:50} | Rating: {mean_rating:.2f} | Reseñas: {int(count):,}\n")
+        except (KeyError, TypeError) as e:
+            f.write(f"Error al procesar valoraciones: {str(e)}\n")
+        f.write("\n")
         
         # Autores más populares
         f.write("=== AUTORES MÁS POPULARES ===\n")
-        top_authors = pd.Series(results['top_authors'])
-        for author, count in top_authors.items():
-            f.write(f"{author:50} | Libros: {int(count):,}\n")
+        try:
+            top_authors = results.get('top_authors', {})
+            if isinstance(top_authors, dict):
+                for author, count in sorted(top_authors.items(), key=lambda x: x[1], reverse=True)[:10]:
+                    f.write(f"{author:50} | Libros: {int(count):,}\n")
+            else:
+                f.write("No se pudieron procesar los datos de autores.\n")
+        except Exception as e:
+            f.write(f"Error al procesar autores: {str(e)}\n")
         f.write("\n")
         
         # Análisis de sentimientos
         f.write("=== ANÁLISIS DE SENTIMIENTOS ===\n")
-        sentiment_stats = results['sentiment_statistics']
-        f.write(f"Sentimiento promedio general: {sentiment_stats['mean']:.3f}\n")
-        f.write(f"Desviación estándar: {sentiment_stats['std']:.3f}\n\n")
+        try:
+            sentiment_stats = results.get('sentiment_statistics', {})
+            f.write(f"Sentimiento promedio general: {sentiment_stats.get('mean', 'N/A'):.3f}\n")
+            f.write(f"Desviación estándar: {sentiment_stats.get('std', 'N/A'):.3f}\n\n")
+        except Exception as e:
+            f.write(f"Error al procesar estadísticas de sentimiento: {str(e)}\n")
         
         # Distribución de sentimientos
         f.write("=== DISTRIBUCIÓN DE SENTIMIENTOS ===\n")
-        sentiment_dist = results['sentiment_distribution']
-        total_sentiments = sum(sentiment_dist.values())
-        for category, count in sentiment_dist.items():
-            percentage = (count / total_sentiments) * 100
-            f.write(f"{category:15} | {count:,} reseñas ({percentage:.1f}%)\n")
+        try:
+            sentiment_dist = results.get('sentiment_distribution', {})
+            total_sentiments = sum(sentiment_dist.values())
+            for category, count in sentiment_dist.items():
+                percentage = (count / total_sentiments) * 100 if total_sentiments > 0 else 0
+                f.write(f"{category:15} | {count:,} reseñas ({percentage:.1f}%)\n")
+        except Exception as e:
+            f.write(f"Error al procesar distribución de sentimientos: {str(e)}\n")
         f.write("\n")
         
         # Sentimiento por valoración
         f.write("=== SENTIMIENTO PROMEDIO POR VALORACIÓN ===\n")
-        sentiment_by_rating = pd.Series(results['sentiment_by_rating']).sort_index()
-        for rating, sentiment in sentiment_by_rating.items():
-            f.write(f"Rating {rating}: {sentiment:.3f}\n")
+        try:
+            sentiment_by_rating = results.get('sentiment_by_rating', {})
+            for rating, sentiment in sorted(sentiment_by_rating.items()):
+                f.write(f"Rating {rating}: {sentiment:.3f}\n")
+        except Exception as e:
+            f.write(f"Error al procesar sentimiento por valoración: {str(e)}\n")
         f.write("\n")
         
-        # Libros con mejor sentimiento promedio (método anterior)
+        # Libros con mejor sentimiento promedio
         f.write("=== TOP 10 LIBROS CON MEJOR SENTIMIENTO ===\n")
-        book_sentiments = ratings_df.copy()
-        book_sentiments['sentiment_score'] = book_sentiments['review/score'].map(results['sentiment_by_rating'])
-        
-        book_sentiment_summary = book_sentiments.groupby('Title').agg({
-            'sentiment_score': 'mean',
-            'review/score': 'count'
-        }).rename(columns={'review/score': 'count'})
-        
-        # Filtrar libros con al menos 5 reseñas
-        book_sentiment_summary = book_sentiment_summary[book_sentiment_summary['count'] >= 5]
-        top_sentiment_books = book_sentiment_summary.sort_values('sentiment_score', ascending=False).head(10)
-        
-        for title, row in top_sentiment_books.iterrows():
-            f.write(f"{title[:50]:50} | Sentimiento: {row['sentiment_score']:.3f} | Reseñas: {int(row['count']):,}\n")
+        try:
+            book_sentiments = ratings_df.copy()
+            book_sentiments['sentiment_score'] = book_sentiments['review/score'].map(results.get('sentiment_by_rating', {}))
+            
+            book_sentiment_summary = book_sentiments.groupby('Title').agg({
+                'sentiment_score': 'mean',
+                'review/score': 'count'
+            }).rename(columns={'review/score': 'count'})
+            
+            # Filtrar libros con al menos 5 reseñas
+            book_sentiment_summary = book_sentiment_summary[book_sentiment_summary['count'] >= 5]
+            top_sentiment_books = book_sentiment_summary.sort_values('sentiment_score', ascending=False).head(10)
+            
+            for title, row in top_sentiment_books.iterrows():
+                f.write(f"{title[:50]:50} | Sentimiento: {row['sentiment_score']:.3f} | Reseñas: {int(row['count']):,}\n")
+        except Exception as e:
+            f.write(f"Error al procesar libros con mejor sentimiento: {str(e)}\n")
         f.write("\n")
         
-        # Nuevos rankings de libros
+        # Rankings adicionales de libros
         f.write("\n=== RANKINGS ADICIONALES DE LIBROS ===\n\n")
         
         # Top libros por número de reseñas
@@ -731,7 +767,7 @@ def export_results_to_txt(books_df: pd.DataFrame, ratings_df: pd.DataFrame, resu
         f.write("=== TOP 10 LIBROS POR SENTIMIENTO PROMEDIO ===\n")
         for idx, row in top_sentiment_score.iterrows():
             f.write(f"{row['Título'][:50]:50} | Sentimiento: {row['Sentimiento Promedio']:.3f} | Reseñas: {int(row['Número de Reseñas']):,}\n")
-
+            
 def main():
     """Función principal mejorada"""
     try:
